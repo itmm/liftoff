@@ -1,25 +1,45 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <zephyr/kernel.h>
+
+static int counter = 10;
+
+static void perform_work();
+
+static K_WORK_DELAYABLE_DEFINE(work, perform_work);
+
+#define SECONDS_IN_COUNTDOWN 1
+#define SECONDS_DURING_WAIT 3
+#define SECONDS_BETWEEN_COUNTDOWNS 60
+#define STARTING_SECONDS_FOR_COUNTDOWN 10
 
 static inline void perform_countdown() {
-	for (int i = 8; i; --i) {
-		printf("%d\n", i);
-		sleep(1);
+	if (counter > 0) {
+		printf("%d\n", counter);
+		counter -= SECONDS_IN_COUNTDOWN;
+		k_work_reschedule(&work, K_SECONDS(SECONDS_IN_COUNTDOWN));
+	} else {
+		puts("liftoff");
+		counter = SECONDS_BETWEEN_COUNTDOWNS - SECONDS_DURING_WAIT;
+		k_work_reschedule(&work, K_SECONDS(SECONDS_DURING_WAIT));
 	}
-	puts("liftoff");
-	sleep(1);
 }
 
 static inline void wait_for_next_countdown() {
-	for (int i = 17; i; --i) {
-		puts("..");
-		sleep(3);
+	puts("..");
+	counter -= SECONDS_DURING_WAIT;
+	k_work_reschedule(&work, K_SECONDS(SECONDS_DURING_WAIT));
+}
+
+static void perform_work() {
+	if (counter <= STARTING_SECONDS_FOR_COUNTDOWN) {
+		perform_countdown();
+	} else {
+		wait_for_next_countdown();
 	}
 }
 
 int main() {
-	for (;;) {
-		perform_countdown();
-		wait_for_next_countdown();
-	}
+	k_work_schedule(&work, K_SECONDS(0));
+	for (;;) { k_sleep(K_SECONDS(100)); }
 }
